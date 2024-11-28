@@ -195,7 +195,7 @@ if __name__ == "__main__":
     temperature = 600
     t0 = 0.0
     dt = 0.1
-    t_steps = 8000
+    t_steps = 4000
     t = np.linspace(t0, t0 + (dt * t_steps), t_steps, endpoint=False)
     sim_pos = run_md(dt, t_steps, x, temperature, *lj_params, seed=2)
 
