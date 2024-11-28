@@ -177,6 +177,8 @@ def run_md(dt, number_of_steps, x, initial_temp, epsilon, sigma, seed=0):
         x = update_pos(x, v, a, dt)
         a1 = get_accelerations(x, lj_params)
         v = update_velo(v, a, a1, dt)
+        v_cm = v.mean() # they all weigh the same
+        v -= v_cm
         a = np.array(a1)
         positions[i, :] = x
     return positions
@@ -187,16 +189,16 @@ if __name__ == "__main__":
     temperature = 600
     t0 = 0.0
     dt = 0.1
-    t_steps = 4000
+    t_steps = 8000
     t = np.linspace(t0,t0+(dt*t_steps), t_steps, endpoint=False)
-    sim_pos = run_md(dt, t_steps, x, temperature, lj_params)
+    sim_pos = run_md(dt, t_steps, x, temperature, *lj_params, seed=2)
         
     for i in range(sim_pos.shape[1]):
         plt.plot(t, sim_pos[:, i], '.', label='atom {}'.format(i))
     plt.xlabel(r'time (s)')
     plt.ylabel(r'$x$-Position/Å')
     plt.legend(frameon=False)
-    plt.savefig("example.png")
+    plt.savefig("figures/example_free_trajectories.png")
     
-    with open("observation.pkl", "wb") as pf:
+    with open("data/observation_free.pkl", "wb") as pf:
         pickle.dump((t,sim_pos), pf)
