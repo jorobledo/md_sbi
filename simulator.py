@@ -2,72 +2,74 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.constants import Boltzmann
 import pickle
-mass_of_argon = 39.948 # amu
+
+mass_of_argon = 39.948  # amu
 
 """Simulation from https://pythoninchemistry.org/sim_and_scat/molecular_dynamics/build_an_md"""
 
+
 def lj_force(r, epsilon, sigma):
     """
-    Implementation of the Lennard-Jones potential 
+    Implementation of the Lennard-Jones potential
     to calculate the force of the interaction.
-    
+
     Parameters
     ----------
     r: float
         Distance between two particles (Å)
-    epsilon: float 
-        Potential energy at the equilibrium bond 
+    epsilon: float
+        Potential energy at the equilibrium bond
         length (eV)
-    sigma: float 
-        Distance at which the potential energy is 
+    sigma: float
+        Distance at which the potential energy is
         zero (Å)
-    
+
     Returns
     -------
     float
         Force of the van der Waals interaction (eV/Å)
     """
-    return 48 * epsilon * np.power(
-        sigma, 12) / np.power(
-        r, 13) - 24 * epsilon * np.power(
-        sigma, 6) / np.power(r, 7)
+    return 48 * epsilon * np.power(sigma, 12) / np.power(
+        r, 13
+    ) - 24 * epsilon * np.power(sigma, 6) / np.power(r, 7)
+
 
 def init_velocity(T, number_of_particles):
     """
-    Initialise the velocities for a series of 
+    Initialise the velocities for a series of
     particles.
-    
+
     Parameters
     ----------
     T: float
-        Temperature of the system at 
+        Temperature of the system at
         initialisation (K)
     number_of_particles: int
         Number of particles in the system
-    
+
     Returns
     -------
     ndarray of floats
-        Initial velocities for a series of 
+        Initial velocities for a series of
         particles (eVs/Åamu)
     """
     R = np.random.rand(number_of_particles) - 0.5
-    return R * np.sqrt(Boltzmann * T / (
-        mass_of_argon * 1.602e-19))
+    return R * np.sqrt(Boltzmann * T / (mass_of_argon * 1.602e-19))
+
 
 def get_accelerations(positions, lj_params):
     """
     Calculate the acceleration on each particle
-    as a  result of each other particle. 
-    N.B. We use the Python convention of 
+    as a  result of each other particle.
+    N.B. We use the Python convention of
     numbering from 0.
-    
+
     Parameters
     ----------
     positions: ndarray of floats
-        The positions, in a single dimension, 
+        The positions, in a single dimension,
         for all of the particles
-    
+
     lj_params: tuple of 2 parameters
         The Lennard-Jhones potential parameters
         epsilon and sigma as a tuple (epsilon, sigma)
@@ -85,55 +87,57 @@ def get_accelerations(positions, lj_params):
             force_scalar = lj_force(rmag, *lj_params)
             force_x = force_scalar * r_x / rmag
             accel_x[i, j] = force_x / mass_of_argon
-            accel_x[j, i] = - force_x / mass_of_argon
+            accel_x[j, i] = -force_x / mass_of_argon
     return np.sum(accel_x, axis=0)
+
 
 def update_pos(x, v, a, dt):
     """
     Update the particle positions.
-    
+
     Parameters
     ----------
     x: ndarray of floats
-        The positions of the particles in a 
+        The positions of the particles in a
         single dimension
     v: ndarray of floats
-        The velocities of the particles in a 
+        The velocities of the particles in a
         single dimension
     a: ndarray of floats
-        The accelerations of the particles in a 
+        The accelerations of the particles in a
         single dimension
     dt: float
         The timestep length
-    
+
     Returns
     -------
     ndarray of floats:
-        New positions of the particles in a single 
+        New positions of the particles in a single
         dimension
     """
     return x + v * dt + 0.5 * a * dt * dt
 
+
 def update_velo(v, a, a1, dt):
     """
     Update the particle velocities.
-    
+
     Parameters
     ----------
     v: ndarray of floats
-        The velocities of the particles in a 
+        The velocities of the particles in a
         single dimension (eVs/Åamu)
     a: ndarray of floats
-        The accelerations of the particles in a 
-        single dimension at the previous 
+        The accelerations of the particles in a
+        single dimension at the previous
         timestep (eV/Åamu)
     a1: ndarray of floats
         The accelerations of the particles in a
-        single dimension at the current 
+        single dimension at the current
         timestep (eV/Åamu)
     dt: float
         The timestep length
-    
+
     Returns
     -------
     ndarray of floats:
@@ -142,10 +146,11 @@ def update_velo(v, a, a1, dt):
     """
     return v + 0.5 * (a + a1) * dt
 
+
 def run_md(dt, number_of_steps, x, initial_temp, epsilon, sigma, seed=0):
     """
     Run a MD simulation.
-    
+
     Parameters
     ----------
     dt: float
@@ -153,19 +158,19 @@ def run_md(dt, number_of_steps, x, initial_temp, epsilon, sigma, seed=0):
     number_of_steps: int
         Number of iterations in the simulation
     initial_temp: float
-        Temperature of the system at 
+        Temperature of the system at
         initialisation (K)
     x: ndarray of floats
-        The initial positions of the particles in a 
+        The initial positions of the particles in a
         single dimension (Å)
     lj_params: tuple of 2 parameters
         The Lennard-Jhones potential parameters
         epsilon and sigma as a tuple (epsilon, sigma)
-        
+
     Returns
     -------
     ndarray of floats
-        The positions for all of the particles 
+        The positions for all of the particles
         throughout the simulation (Å)
     """
     np.random.seed(seed)
@@ -177,11 +182,12 @@ def run_md(dt, number_of_steps, x, initial_temp, epsilon, sigma, seed=0):
         x = update_pos(x, v, a, dt)
         a1 = get_accelerations(x, lj_params)
         v = update_velo(v, a, a1, dt)
-        v_cm = v.mean() # they all weigh the same
+        v_cm = v.mean()  # they all weigh the same
         v -= v_cm
         a = np.array(a1)
         positions[i, :] = x
     return positions
+
 
 if __name__ == "__main__":
     x = np.array([1, 5, 10])
@@ -190,15 +196,15 @@ if __name__ == "__main__":
     t0 = 0.0
     dt = 0.1
     t_steps = 8000
-    t = np.linspace(t0,t0+(dt*t_steps), t_steps, endpoint=False)
+    t = np.linspace(t0, t0 + (dt * t_steps), t_steps, endpoint=False)
     sim_pos = run_md(dt, t_steps, x, temperature, *lj_params, seed=2)
-        
+
     for i in range(sim_pos.shape[1]):
-        plt.plot(t, sim_pos[:, i], '.', label='atom {}'.format(i))
-    plt.xlabel(r'time (s)')
-    plt.ylabel(r'$x$-Position/Å')
+        plt.plot(t, sim_pos[:, i], ".", label="atom {}".format(i))
+    plt.xlabel(r"time (s)")
+    plt.ylabel(r"$x$-Position/Å")
     plt.legend(frameon=False)
     plt.savefig("figures/example_free_trajectories.png")
-    
+
     with open("data/observation_free.pkl", "wb") as pf:
-        pickle.dump((t,sim_pos), pf)
+        pickle.dump((t, sim_pos), pf)
