@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 import time
 from scipy.signal import find_peaks
 
@@ -15,12 +16,13 @@ from sbi.utils.user_input_checks import (
     process_prior,
     process_simulator,
 )
+
 # from multiprocessing import Pool, cpu_count
 
 if __name__ == "__main__":
     # theta = (T, sigma, epsilon)
     prior_min = [1e-3, 0.005, 1.6]
-    prior_max = [800.0, 0.03, 5.0]
+    prior_max = [2000.0, 0.05, 5.0]
 
     prior = utils.torchutils.BoxUniform(
         low=torch.as_tensor(prior_min), high=torch.as_tensor(prior_max)
@@ -33,23 +35,32 @@ if __name__ == "__main__":
     # get initial positions
     x0 = observed_pos[0, :]
     dt = t[1] - t[0]
+    box_length = 20
 
     def create_x(theta):
         T, epsilon, sigma = theta.numpy()
-        return run_md(dt, len(t), x0, T, epsilon, sigma)
+        return run_md(dt, len(t), x0, T, epsilon, sigma, box_length=box_length)
+
+    def pairwise_distances(x):
+        # Create a meshgrid of indices
+        n = x.shape[1]
+        i, j = np.triu_indices(n, k=1)
+        # Compute distances for upper triangular part (unique pairs)
+        distances = np.abs(x[:, i] - x[:, j])
+        return distances
 
     def create_summary(theta):
         T, epsilon, sigma = theta.numpy()
         x = run_md(dt, len(t), x0, T, epsilon, sigma)
         final_pos = x[-1, :]
-        avg_pairwise_distance = np.array(
-            [x[:, 2] - x[:, 0], x[:, 1] - x[:, 0], x[:, 2] - x[:, 1]]
-        ).mean(axis=1)
-        num_cp = [len(find_peaks(i)[0]) for i in ((x - x.mean(axis=0)) ** 2).T]
-        return np.stack([avg_pairwise_distance, final_pos, num_cp]).flatten()
+        avg_pairwise_distance = pairwise_distances(x).mean(axis=0)
+        num_cp = np.array(
+            [len(find_peaks(i)[0]) for i in ((x - x.mean(axis=0)) ** 2).T]
+        )
+        return np.concatenate([avg_pairwise_distance, final_pos, num_cp], axis=0)
 
     x_truth = observed_pos
-    for i in range(0, 3):
+    for i in range(0, x_truth.shape[1]):
         plt.plot(t, x_truth[:, i], "k", label=f"atom {i}")
 
     n_samples = 10000
@@ -64,13 +75,10 @@ if __name__ == "__main__":
     elapsed_time = time.time() - start_time
     print(f"Finished simulating for sbi in {elapsed_time:.2f} seconds")
 
-    color = ["blue", "orange", "green"]
-    for i in range(0, 3):
+    for i, ci in zip(range(0, x_traj.shape[2]), mcolors.TABLEAU_COLORS):
         for j in range(20):
-            plt.plot(
-                t, x_traj[np.random.choice(n_samples), :, i], color=color[i], alpha=0.2
-            )
-    plt.ylim(-5, 15)
+            plt.plot(t, x_traj[np.random.choice(n_samples), :, i], color=ci, alpha=0.2)
+    plt.ylim(-box_length / 2.0, box_length / 2.0)
     plt.savefig("figures/uninformative_prior.png")
     plt.close()
 
@@ -95,15 +103,11 @@ if __name__ == "__main__":
 
     # generate observed point summary statistics
     final_pos = x_truth[-1, :]
-    avg_pairwise_distance = np.array(
-        [
-            x_truth[:, 2] - x_truth[:, 0],
-            x_truth[:, 1] - x_truth[:, 0],
-            x_truth[:, 2] - x_truth[:, 1],
-        ]
-    ).mean(axis=1)
-    num_cp = [len(find_peaks(i)[0]) for i in ((x_truth - x_truth.mean(axis=0)) ** 2).T]
-    x_o = np.stack([avg_pairwise_distance, final_pos, num_cp]).flatten()
+    avg_pairwise_distance = pairwise_distances(x_truth).mean(axis=0)
+    num_cp = np.array(
+        [len(find_peaks(i)[0]) for i in ((x_truth - x_truth.mean(axis=0)) ** 2).T]
+    )
+    x_o = np.concatenate([avg_pairwise_distance, final_pos, num_cp], axis=0)
 
     theta_p = posterior.sample((10000,), x=x_o)
 
@@ -114,10 +118,14 @@ if __name__ == "__main__":
         theta_p,
         limits=list(zip(prior_min, prior_max)),
         ticks=list(zip(prior_min, prior_max)),
-        fig_kwargs={"figsize": (7, 7)},
+        fig_kwargs={
+            "figsize": (7, 7),
+            "points_offdiag": {"markersize": 6},
+            "points_colors": "r",
+        },
         labels=["T", "epsilon", "sigma"],
-        points_offdiag={"markersize": 6},
-        points_colors="r",
+        upper="kde",
+        diag="kde",
         points=theta_o,
     )
     plt.savefig("figures/result.png", dpi=300)

@@ -91,7 +91,7 @@ def get_accelerations(positions, lj_params):
     return np.sum(accel_x, axis=0)
 
 
-def update_pos(x, v, a, dt):
+def update_pos(x, v, a, dt, box_length):
     """
     Update the particle positions.
 
@@ -115,7 +115,10 @@ def update_pos(x, v, a, dt):
         New positions of the particles in a single
         dimension
     """
-    return x + v * dt + 0.5 * a * dt * dt
+    out_of_bounds = np.abs(x) > box_length / 2.0
+    v[out_of_bounds] *= -1
+    x = x + v * dt + 0.5 * a * dt * dt
+    return x, v
 
 
 def update_velo(v, a, a1, dt):
@@ -147,7 +150,9 @@ def update_velo(v, a, a1, dt):
     return v + 0.5 * (a + a1) * dt
 
 
-def run_md(dt, number_of_steps, x, initial_temp, epsilon, sigma, seed=0):
+def run_md(
+    dt, number_of_steps, x, initial_temp, epsilon, sigma, box_length=20, seed=None
+):
     """
     Run a MD simulation.
 
@@ -173,38 +178,43 @@ def run_md(dt, number_of_steps, x, initial_temp, epsilon, sigma, seed=0):
         The positions for all of the particles
         throughout the simulation (Å)
     """
-    np.random.seed(seed)
-    positions = np.zeros((number_of_steps, 3))
-    v = init_velocity(initial_temp, 3)
+    if seed:
+        np.random.seed(seed)
+    num_particles = x.shape[0]
+    positions = np.zeros((number_of_steps, num_particles))
+    v = init_velocity(initial_temp, num_particles)
     lj_params = (epsilon, sigma)
     a = get_accelerations(x, lj_params)
     for i in range(number_of_steps):
-        x = update_pos(x, v, a, dt)
+        x, v = update_pos(x, v, a, dt, box_length)
         a1 = get_accelerations(x, lj_params)
         v = update_velo(v, a, a1, dt)
-        v_cm = v.mean()  # they all weigh the same
-        v -= v_cm
+        # v_cm = v.mean()  # they all weigh the same
+        # v -= v_cm
         a = np.array(a1)
         positions[i, :] = x
     return positions
 
 
 if __name__ == "__main__":
-    x = np.array([1, 5, 10])
+    box_length = 20
+    x = np.linspace(-box_length / 2, box_length / 2, 6)[1:-1]
     lj_params = (0.0103, 3.4)
     temperature = 600
     t0 = 0.0
-    dt = 0.1
+    dt = 0.2
     t_steps = 4000
     t = np.linspace(t0, t0 + (dt * t_steps), t_steps, endpoint=False)
-    sim_pos = run_md(dt, t_steps, x, temperature, *lj_params, seed=2)
+    sim_pos = run_md(
+        dt, t_steps, x, temperature, *lj_params, box_length=box_length, seed=None
+    )
 
     for i in range(sim_pos.shape[1]):
         plt.plot(t, sim_pos[:, i], ".", label="atom {}".format(i))
     plt.xlabel(r"time (s)")
     plt.ylabel(r"$x$-Position/Å")
     plt.legend(frameon=False)
+    plt.ylim(-box_length / 2.0, box_length / 2.0)
     plt.savefig("figures/example_free_trajectories.png")
-
     with open("data/observation_free.pkl", "wb") as pf:
         pickle.dump((t, sim_pos), pf)
